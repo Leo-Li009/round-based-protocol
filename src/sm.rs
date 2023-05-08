@@ -120,6 +120,8 @@ pub trait StateMachine {
 /// Represent a message transmitting between parties on wire
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Msg<B> {
+
+    pub round: u16,
     /// Index of the sender
     ///
     /// Lies in range `[1; n]` where `n` is number of parties involved in computation
@@ -140,6 +142,7 @@ impl<B> Msg<B> {
         F: FnOnce(B) -> T,
     {
         Msg {
+            round: self.round,
             sender: self.sender,
             receiver: self.receiver,
             body: f(self.body),

@@ -7,14 +7,15 @@ use futures::future::{Either, FutureExt};
 use futures::sink::Sink;
 use futures::stream::{self, FusedStream, Stream, StreamExt};
 use futures::SinkExt;
+use multi_party_ecdsa::utilities::mta::MessageB;
 use tokio::time::{self, timeout_at};
 use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::keygen::{
-    Keygen, LocalKey, ProtocolMessage,
+    Keygen, ProtocolMessage,
 };
 use serde::{Deserialize, Serialize};
 
 
-use crate::{IsCritical, Msg, StateMachine};
+use crate::{IsCritical, Msg, StateMachine, sm};
 use watcher::{BlindWatcher, ProtocolWatcher, When};
 
 pub mod watcher;
@@ -56,29 +57,31 @@ pub mod watcher;
 /// authenticate messages)
 
 #[derive(Serialize)]
-struct RoundMsg {
+struct RoundMsg<B> {
     round: u16,
+    // sender: u16,
+    // receiver: Option<u16>,
+    body: B,
     sender: u16,
     receiver: Option<u16>,
-    body: ProtocolMessage,
 }
 
-impl RoundMsg {
-    fn from_round(
-        round: u16,
-        messages: Vec<Msg<<Keygen as StateMachine>::MessageBody>>,
-    ) -> Vec<Self> {
-        messages
-            .into_iter()
-            .map(|m| RoundMsg {
-                round,
-                sender: m.sender,
-                receiver: m.receiver,
-                body: m.body,
-            })
-            .collect::<Vec<_>>()
-    }
-}
+// impl RoundMsg {
+//     fn from_round(
+//         round: u16,
+//         messages: Vec<Msg<StateMachine::MessageBody>>,
+//     ) -> Vec<Self> {
+//         messages
+//             .into_iter()
+//             .map(|m| RoundMsg {
+//                 round,
+//                 sender: m.sender,
+//                 receiver: m.receiver,
+//                 body: m.body,
+//             })
+//             .collect::<Vec<_>>()
+//     }
+// }
 
 
 pub struct AsyncProtocol<SM, I, O, W = BlindWatcher> {
@@ -230,11 +233,23 @@ where
         let state = self.state.as_mut().ok_or(InternalError::MissingState)?;
 
         if !state.message_queue().is_empty() {
-            let message  = state.message_queue().drain(..).map(Ok);
-            let round = state.current_round();
-            let mut msgs = stream::iter(RoundMsg::from_round(round,message));
+          //  let messages  = 
+             let round =self.current_round.unwrap();
+            
+        //   let mut mess = self.state.as_mut().unwrap().message_queue().into_iter().map(|m| RoundMsg {
+        //     round,
+        //     sender: m.sender,
+        //     receiver: m.receiver,
+        //     body: m.body,
+           
+        // })
+        // .collect::<Vec<_>>();
+          
+           let mut msgs = stream::iter(state.message_queue().drain(..).map(Ok));
+           // let mut msgs = stream::iter(message);
+
             self.outgoing
-                .send_all(&mut msgs)
+                .send_all( &mut msgs)
                 .await
                 .map_err(Error::Send)?;
         }
