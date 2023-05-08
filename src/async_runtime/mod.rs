@@ -8,6 +8,11 @@ use futures::sink::Sink;
 use futures::stream::{self, FusedStream, Stream, StreamExt};
 use futures::SinkExt;
 use tokio::time::{self, timeout_at};
+use multi_party_ecdsa::protocols::multi_party_ecdsa::gg_2020::state_machine::keygen::{
+    Keygen, LocalKey, ProtocolMessage,
+};
+use serde::{Deserialize, Serialize};
+
 
 use crate::{IsCritical, Msg, StateMachine};
 use watcher::{BlindWatcher, ProtocolWatcher, When};
@@ -49,6 +54,33 @@ pub mod watcher;
 /// Note that if the protocol has some cryptographical assumptions on transport channel (e.g. messages
 /// should be encrypted, authenticated), then stream and sink must meet these assumptions (e.g. encrypt,
 /// authenticate messages)
+
+#[derive(Serialize)]
+struct RoundMsg {
+    round: u16,
+    sender: u16,
+    receiver: Option<u16>,
+    body: ProtocolMessage,
+}
+
+impl RoundMsg {
+    fn from_round(
+        round: u16,
+        messages: Vec<Msg<<Keygen as StateMachine>::MessageBody>>,
+    ) -> Vec<Self> {
+        messages
+            .into_iter()
+            .map(|m| RoundMsg {
+                round,
+                sender: m.sender,
+                receiver: m.receiver,
+                body: m.body,
+            })
+            .collect::<Vec<_>>()
+    }
+}
+
+
 pub struct AsyncProtocol<SM, I, O, W = BlindWatcher> {
     state: Option<SM>,
     incoming: I,
@@ -198,7 +230,9 @@ where
         let state = self.state.as_mut().ok_or(InternalError::MissingState)?;
 
         if !state.message_queue().is_empty() {
-            let mut msgs = stream::iter(state.message_queue().drain(..).map(Ok));
+            let message  = state.message_queue().drain(..).map(Ok);
+            let round = state.current_round();
+            let mut msgs = stream::iter(RoundMsg::from_round(round,message));
             self.outgoing
                 .send_all(&mut msgs)
                 .await
