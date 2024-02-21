@@ -26,6 +26,7 @@ pub trait MessageStore {
     /// Might result in error if pre-validation failed. However, it does not
     /// prevent MessageStore from accepting further messages.
     fn push_msg(&mut self, msg: Msg<Self::M>) -> Result<(), Self::Err>;
+    fn push_msg_include_me(&mut self, msg: Msg<Self::M>,de_len:usize) -> Result<(), Self::Err>;
     /// Indicates if store contains message from this party
     fn contains_msg_from(&self, sender: u16) -> bool;
     /// Indicates whether store needs more messages to receive

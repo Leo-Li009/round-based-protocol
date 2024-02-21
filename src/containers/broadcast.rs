@@ -10,7 +10,7 @@ use super::traits::{MessageContainer, MessageStore};
 #[derive(Debug)]
 pub struct BroadcastMsgs<B> {
     my_ind: u16,
-    msgs: Vec<B>,
+    pub msgs: Vec<B>,
 }
 
 impl<B> BroadcastMsgs<B>
@@ -40,6 +40,12 @@ where
 
     /// Turns container into vec of `n` messages (where given message lies at index `party_i-1`)
     pub fn into_vec_including_me(mut self, me: B) -> Vec<B> {
+        println!("my ind {}",{self.my_ind});
+        self.msgs.insert(self.my_ind as usize - 1, me);
+        self.msgs
+    }
+    pub fn into_vec_including_me_type2(mut self, me: B) -> Vec<B> {
+        println!("my ind {}",{self.my_ind});
         self.msgs.insert(self.my_ind as usize - 1, me);
         self.msgs
     }
@@ -95,6 +101,7 @@ impl<M> BroadcastMsgsStore<M> {
         }
     }
 
+
     /// Amount of received messages so far
     pub fn messages_received(&self) -> usize {
         self.msgs.len() - self.msgs_left
@@ -111,6 +118,7 @@ impl<M> MessageStore for BroadcastMsgsStore<M> {
     type Output = BroadcastMsgs<M>;
 
     fn push_msg(&mut self, msg: Msg<Self::M>) -> Result<(), Self::Err> {
+        println!("sender {}",msg.sender);
         if msg.sender == 0 {
             return Err(StoreErr::UnknownSender { sender: msg.sender });
         }
@@ -134,7 +142,27 @@ impl<M> MessageStore for BroadcastMsgsStore<M> {
 
         Ok(())
     }
+    fn push_msg_include_me(&mut self, msg: Msg<Self::M>,de_len: usize) -> Result<(), Self::Err> {
+        println!("sender {}",msg.sender);
+        if msg.sender == 0 {
+            return Err(StoreErr::UnknownSender { sender: msg.sender });
+        }
+        if msg.receiver.is_some() {
+            return Err(StoreErr::ExpectedBroadcast);
+        }
+        let party_j = usize::from(msg.sender);
+        let slot = self
+            .msgs
+            .get_mut(party_j - 1)
+            .ok_or(StoreErr::UnknownSender { sender: msg.sender })?;
+        if slot.is_some() {
+            return Err(StoreErr::MsgOverwrite);
+        }
+        *slot = Some(msg.body);
+        self.msgs_left -= 1;
 
+        Ok(())
+    }
     fn contains_msg_from(&self, sender: u16) -> bool {
         let party_j = match Ord::cmp(&sender, &self.party_i) {
             Ordering::Less => usize::from(sender),

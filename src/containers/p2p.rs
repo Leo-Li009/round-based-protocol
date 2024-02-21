@@ -137,7 +137,29 @@ impl<M> MessageStore for P2PMsgsStore<M> {
 
         Ok(())
     }
+    fn push_msg_include_me(&mut self, msg: Msg<Self::M>,de_len:usize) -> Result<(), Self::Err> {
+        if msg.sender == 0 {
+            return Err(StoreErr::UnknownSender { sender: msg.sender });
+        }
+        if msg.receiver.is_none() {
+            return Err(StoreErr::ExpectedP2P);
+        }
+        if msg.receiver != Some(self.party_i) {
+            return Err(StoreErr::NotForMe);
+        }
+        let party_j = usize::from(msg.sender);
+        let slot = self
+            .msgs
+            .get_mut(party_j - 1)
+            .ok_or(StoreErr::UnknownSender { sender: msg.sender })?;
+        if slot.is_some() {
+            return Err(StoreErr::MsgOverwrite);
+        }
+        *slot = Some(msg.body);
+        self.msgs_left -= 1;
 
+        Ok(())
+    }
     fn contains_msg_from(&self, sender: u16) -> bool {
         let party_j = match Ord::cmp(&sender, &self.party_i) {
             Ordering::Less => usize::from(sender),
